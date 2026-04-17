@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Control de Relevadores</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2a2d3e;
+      --accent: #4f8ef7;
+      --on: #22c55e;
+      --off: #ef4444;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --radius: 16px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    header h1 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      color: var(--text);
+    }
+
+    header p {
+      color: var(--muted);
+      margin-top: 0.4rem;
+      font-size: 0.9rem;
+    }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 0.4rem 1rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 2rem;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: background 0.3s;
+    }
+
+    .status-dot.online { background: var(--on); box-shadow: 0 0 6px var(--on); }
+    .status-dot.error  { background: var(--off); box-shadow: 0 0 6px var(--off); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1.25rem;
+      width: 100%;
+      max-width: 900px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.75rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.25rem;
+      transition: border-color 0.3s, box-shadow 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card.active {
+      border-color: var(--on);
+      box-shadow: 0 0 24px rgba(34, 197, 94, 0.12);
+    }
+
+    .card.loading { opacity: 0.6; pointer-events: none; }
+
+    .card-glow {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at top, rgba(34,197,94,0.08), transparent 70%);
+      opacity: 0;
+      transition: opacity 0.4s;
+      pointer-events: none;
+    }
+
+    .card.active .card-glow { opacity: 1; }
+
+    .relay-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: var(--bg);
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+
+    .card.active .relay-icon {
+      border-color: var(--on);
+      box-shadow: 0 0 16px rgba(34,197,94,0.35);
+    }
+
+    .relay-icon svg {
+      width: 26px;
+      height: 26px;
+      stroke: var(--muted);
+      transition: stroke 0.3s;
+    }
+
+    .card.active .relay-icon svg { stroke: var(--on); }
+
+    .relay-info { text-align: center; }
+
+    .relay-name {
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .relay-state {
+      font-size: 0.78rem;
+      margin-top: 0.25rem;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--off);
+      transition: color 0.3s;
+    }
+
+    .card.active .relay-state { color: var(--on); }
+
+    /* Toggle switch */
+    .toggle {
+      position: relative;
+      width: 64px;
+      height: 34px;
+      cursor: pointer;
+    }
+
+    .toggle input { display: none; }
+
+    .toggle-track {
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      background: #2a2d3e;
+      border: 2px solid var(--border);
+      transition: background 0.3s, border-color 0.3s;
+    }
+
+    .toggle input:checked ~ .toggle-track {
+      background: rgba(34,197,94,0.2);
+      border-color: var(--on);
+    }
+
+    .toggle-thumb {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: transform 0.3s, background 0.3s, box-shadow 0.3s;
+    }
+
+    .toggle input:checked ~ .toggle-thumb {
+      transform: translateX(30px);
+      background: var(--on);
+      box-shadow: 0 0 8px rgba(34,197,94,0.5);
+    }
+
+    .all-controls {
+      display: flex;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .btn {
+      padding: 0.5rem 1.4rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s, transform 0.1s;
+    }
+
+    .btn:hover { background: var(--border); }
+    .btn:active { transform: scale(0.96); }
+
+    .btn-on  { border-color: var(--on);  color: var(--on); }
+    .btn-off { border-color: var(--off); color: var(--off); }
+
+    .btn-on:hover  { background: rgba(34,197,94,0.12); }
+    .btn-off:hover { background: rgba(239,68,68,0.12); }
+
+    .refresh-info {
+      color: var(--muted);
+      font-size: 0.75rem;
+      margin-top: 2rem;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 2px solid var(--muted);
+      border-top-color: var(--accent);
+      animation: spin 0.7s linear infinite;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .toast {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 0.5rem 1.2rem;
+      font-size: 0.82rem;
+      color: var(--text);
+      transition: transform 0.3s;
+      z-index: 100;
+      white-space: nowrap;
+    }
+
+    .toast.show { transform: translateX(-50%) translateY(0); }
+    .toast.success { border-color: var(--on); color: var(--on); }
+    .toast.error   { border-color: var(--off); color: var(--off); }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Control de Relevadores</h1>
+    <p>Raspberry Pi 4B &mdash; ESP32 via Modbus</p>
+  </header>
+
+  <div class="status-bar">
+    <span class="status-dot" id="dot"></span>
+    <span id="status-text">Conectando...</span>
+  </div>
+
+  <div class="all-controls">
+    <button class="btn btn-on"  onclick="setAll(true)">Encender todos</button>
+    <button class="btn btn-off" onclick="setAll(false)">Apagar todos</button>
+  </div>
+
+  <div class="grid" id="grid">
+    <!-- Cards injected by JS -->
+  </div>
+
+  <p class="refresh-info">Actualización automática cada 5 segundos</p>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const RELAY_NAMES = {
+      relay_1: 'Relevador 1',
+      relay_2: 'Relevador 2',
+      relay_3: 'Relevador 3',
+      relay_4: 'Relevador 4',
+    };
+
+    const RELAY_NUMS = { relay_1: 1, relay_2: 2, relay_3: 3, relay_4: 4 };
+
+    let states = { relay_1: false, relay_2: false, relay_3: false, relay_4: false };
+
+    // ── Build cards ────────────────────────────────────────────────
+    function buildGrid() {
+      const grid = document.getElementById('grid');
+      grid.innerHTML = '';
+
+      Object.keys(RELAY_NAMES).forEach(key => {
+        const num = RELAY_NUMS[key];
+        grid.insertAdjacentHTML('beforeend', `
+          <div class="card" id="card-${key}">
+            <div class="card-glow"></div>
+            <div class="relay-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
+                <line x1="12" y1="2" x2="12" y2="12"/>
+              </svg>
+            </div>
+            <div class="relay-info">
+              <div class="relay-name">${RELAY_NAMES[key]}</div>
+              <div class="relay-state" id="state-${key}">APAGADO</div>
+            </div>
+            <label class="toggle" title="Alternar ${RELAY_NAMES[key]}">
+              <input type="checkbox" id="toggle-${key}" onchange="handleToggle('${key}', ${num}, this.checked)" />
+              <span class="toggle-track"></span>
+              <span class="toggle-thumb"></span>
+            </label>
+          </div>
+        `);
+      });
+    }
+
+    // ── Update UI from state object ────────────────────────────────
+    function applyStates(data) {
+      Object.keys(RELAY_NAMES).forEach(key => {
+        const on = !!data[key];
+        states[key] = on;
+
+        const card   = document.getElementById(`card-${key}`);
+        const label  = document.getElementById(`state-${key}`);
+        const toggle = document.getElementById(`toggle-${key}`);
+
+        card.classList.toggle('active', on);
+        label.textContent = on ? 'ENCENDIDO' : 'APAGADO';
+        toggle.checked = on;
+      });
+    }
+
+    // ── Fetch relay states ─────────────────────────────────────────
+    async function fetchStates(silent = false) {
+      try {
+        const res = await fetch('/relays/');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        applyStates(data);
+        setStatus('online', 'Conectado');
+      } catch (e) {
+        setStatus('error', 'Sin conexión');
+        if (!silent) showToast('No se pudo conectar con el dispositivo', 'error');
+      }
+    }
+
+    // ── Toggle a single relay ──────────────────────────────────────
+    async function handleToggle(key, num, checked) {
+      const card = document.getElementById(`card-${key}`);
+      card.classList.add('loading');
+
+      try {
+        const res = await fetch(`/relays/${num}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ estado: checked }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || `HTTP ${res.status}`);
+        }
+
+        states[key] = checked;
+        applyStates(states);
+        showToast(
+          `${RELAY_NAMES[key]}: ${checked ? 'Encendido' : 'Apagado'}`,
+          'success'
+        );
+      } catch (e) {
+        // Revert toggle on failure
+        document.getElementById(`toggle-${key}`).checked = states[key];
+        showToast(`Error: ${e.message}`, 'error');
+      } finally {
+        card.classList.remove('loading');
+      }
+    }
+
+    // ── Set all relays ─────────────────────────────────────────────
+    async function setAll(on) {
+      for (const key of Object.keys(RELAY_NAMES)) {
+        await handleToggle(key, RELAY_NUMS[key], on);
+      }
+    }
+
+    // ── Status bar ─────────────────────────────────────────────────
+    function setStatus(cls, text) {
+      const dot  = document.getElementById('dot');
+      const span = document.getElementById('status-text');
+      dot.className  = `status-dot ${cls}`;
+      span.textContent = text;
+    }
+
+    // ── Toast notifications ────────────────────────────────────────
+    let toastTimer;
+    function showToast(msg, type = '') {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.className   = `toast${type ? ' ' + type : ''} show`;
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { t.classList.remove('show'); }, 2800);
+    }
+
+    // ── Init ───────────────────────────────────────────────────────
+    buildGrid();
+    fetchStates();
+    setInterval(() => fetchStates(true), 5000);
+  </script>
+</body>
+</html>
